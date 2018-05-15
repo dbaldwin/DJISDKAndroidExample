@@ -13,6 +13,8 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -23,6 +25,8 @@ import dji.common.error.DJIError;
 import dji.common.error.DJISDKError;
 import dji.sdk.base.BaseComponent;
 import dji.sdk.base.BaseProduct;
+import dji.sdk.mission.MissionControl;
+import dji.sdk.products.Aircraft;
 import dji.sdk.sdkmanager.DJISDKManager;
 
 public class MainActivity extends AppCompatActivity {
@@ -50,6 +54,8 @@ public class MainActivity extends AppCompatActivity {
     private AtomicBoolean isRegistrationInProgress = new AtomicBoolean(false);
     private static final int REQUEST_PERMISSION_CODE = 12345;
 
+    private MissionLogic missionLogic;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -60,7 +66,48 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         //Initialize DJI SDK Manager
         mHandler = new Handler(Looper.getMainLooper());
+
+        // Handle button click
+        Button launchButton = (Button) findViewById(R.id.button_launch);
+        launchButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                missionLogic.getHomeLocationAndLaunchMission();
+            }
+        });
+
+        missionLogic = new MissionLogic();
+
     }
+
+    @Override
+    public void onAttachedToWindow() {
+
+        super.onAttachedToWindow();
+        BaseProduct product = MApplication.getProductInstance();
+
+        if (product == null || !product.isConnected()) {
+            ToastUtils.setResultToToast("Disconnect");
+            missionLogic.missionControl = null;
+            return;
+        } else {
+            missionLogic.missionControl = MissionControl.getInstance();
+            if (product instanceof Aircraft) {
+                missionLogic.flightController = ((Aircraft) product).getFlightController();
+            }
+        }
+    }
+
+    @Override
+    public void onDetachedFromWindow() {
+
+        super.onDetachedFromWindow();
+        if (missionLogic.missionControl != null && missionLogic.missionControl.scheduledCount() > 0) {
+            missionLogic.missionControl.unscheduleEverything();
+            missionLogic.missionControl.removeAllListeners();
+        }
+    }
+
     /**
      * Checks if there is any missing permissions, and
      * requests runtime permission if needed.
